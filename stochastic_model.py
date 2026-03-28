@@ -13,7 +13,7 @@ NEXT_WORD    = 1
 STOP_WORDS   = [
     'o', 'a', 'os', 'as', 'de', 'do', 'da', 'dos', 'das', 
     'em', 'no', 'na', 'nos', 'nas', 'um', 'uma', 'uns', 'umas',
-    'e', 'que', 'com', 'por', 'para', 'se', 'meu', 'seu'
+    'e', 'que', 'com', 'por', 'para', 'se', 'meu', 'seu', 'não'
 ]
 
 def time_measurement(func):
@@ -138,16 +138,16 @@ def find_next_candidates(current_word, conditional_probs, marginal_probs, words_
 def save_model(marginal_probs, N, conditional_probs, words_frequencies):
     print(f"Saving model...")
 
-    with open("cond_probs.pkl", "wb") as f:
+    with open("pkl_files/cond_probs.pkl", "wb") as f:
         pickle.dump(conditional_probs, f)
     
-    with open("words_frequencies.pkl", "wb") as f:
+    with open("pkl_files/words_frequencies.pkl", "wb") as f:
         pickle.dump(words_frequencies, f)
     
-    with open("marginal_probs.pkl", "wb") as f:
+    with open("pkl_files/marginal_probs.pkl", "wb") as f:
         pickle.dump(marginal_probs, f)
     
-    with open("len_vocabulary.pkl", "wb") as f:
+    with open("pkl_files/len_vocabulary.pkl", "wb") as f:
         pickle.dump(N, f)
 
 
@@ -179,17 +179,17 @@ def main(phrase: str, length: int):
     marginal_probs = {}
     N = 0
 
-    if Path('cond_probs.pkl').exists():
+    if Path('pkl_files/cond_probs.pkl').exists():
         with open(Path('cond_probs.pkl'), "rb") as f:
             conditional_probs = pickle.load(f)
 
-        with open(Path("words_frequencies.pkl"), "rb") as f:
+        with open(Path("pkl_files/words_frequencies.pkl"), "rb") as f:
             words_frequencies = pickle.load(f)
         
-        with open(Path("marginal_probs.pkl"), "rb") as f:
+        with open(Path("pkl_files/marginal_probs.pkl"), "rb") as f:
            marginal_probs = pickle.load(f)
         
-        with open(Path("len_vocabulary.pkl"), "rb") as f:
+        with open(Path("pkl_files/len_vocabulary.pkl"), "rb") as f:
             N = pickle.load(f)
 
         print("Model obtained!")
