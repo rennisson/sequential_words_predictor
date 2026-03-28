@@ -28,6 +28,7 @@ def time_measurement(func):
 
 @time_measurement
 def get_text():
+    print("Getting texts...")
     contents = []
 
     for file in glob.glob("books/*.txt"):
@@ -35,10 +36,13 @@ def get_text():
             # Lê todo o conteúdo e armazena na variável 'texto'
             contents.append(f.read())
     text = "\n".join(contents)
-    return text
+
+    clean_text = format_text(text)
+    return clean_text
 
 @time_measurement
 def format_text(text):
+    print("Cleaning text...")
     text_cleaned = text.replace(",", " ")
     text_cleaned = text_cleaned.replace(".", " ")
     text_cleaned = text_cleaned.replace(";", " ")
@@ -47,6 +51,7 @@ def format_text(text):
     text_cleaned = text_cleaned.replace("...", " ")
     text_cleaned = text_cleaned.replace("!", " ")
     text_cleaned = text_cleaned.replace("--", " ")
+    text_cleaned = text_cleaned.replace("—", " ")
     text_cleaned = text_cleaned.replace("\n", " ")
     text_cleaned = text_cleaned.replace('"', " ")
     text_cleaned = text_cleaned.lower()
@@ -56,6 +61,7 @@ def format_text(text):
 
 @time_measurement
 def get_words_map(text):
+    print("Mapping words...")
     words_map = {}
 
     for i in range(len(text) - 1):
@@ -71,6 +77,8 @@ def get_words_map(text):
 
 @time_measurement
 def marginal_probabilities(text):
+    print("Calculating marginal probabilities...")
+
     N = len(text)
     print(f"{N=}")
     words_counter = Counter(text)
@@ -80,6 +88,7 @@ def marginal_probabilities(text):
 
 @time_measurement
 def conditional_probabilities(words_map, N, alpha=1):
+    print("Calculating conditional probabilities...")
     # Calculating CONDITIONAL PROBABILITIES
     words_frequencies = {}
     conditional_probs = {}
@@ -116,9 +125,6 @@ def find_next_candidates(current_word, conditional_probs, marginal_probs, words_
     next_candidates = marginal_probs.keys() 
     total_prob = total_probability(current_word, words_frequencies, conditional_probs, marginal_probs, N, alpha)
 
-    if total_prob <= 0:
-        return {'.': 0}
-
     for candidate in next_candidates:
         conditional_prob = conditional_probs[(current_word, candidate)] \
                             if (current_word, candidate) in conditional_probs \
@@ -128,26 +134,9 @@ def find_next_candidates(current_word, conditional_probs, marginal_probs, words_
     
     return next_candidates_probs
 
-@time_measurement
-def train():
-    print("Getting texts...")
-    text = get_text()
 
-    print("Cleaning text...")
-    clean_text = format_text(text)
-
-    print("Starting model training...")
-    print("Mapping words...")
-    words_map = get_words_map(clean_text)
-
-    print("Calculating marginal probabilities...")
-    marginal_probs = marginal_probabilities(clean_text)
-    N = len(marginal_probs.keys())
-
-    print("Calculating conditional probabilities...")
-    conditional_probs, words_frequencies = conditional_probabilities(words_map, N, alpha=1)
-    
-    print("Training finished.")
+def save_model(marginal_probs, N, conditional_probs, words_frequencies):
+    print(f"Saving model...")
 
     with open("cond_probs.pkl", "wb") as f:
         pickle.dump(conditional_probs, f)
@@ -160,6 +149,25 @@ def train():
     
     with open("len_vocabulary.pkl", "wb") as f:
         pickle.dump(N, f)
+
+
+@time_measurement
+def train():
+    text = get_text()
+
+    print("Starting model training...")
+    words_map      = get_words_map(text)
+    marginal_probs = marginal_probabilities(text)
+    N              = len(marginal_probs.keys())
+    conditional_probs, words_frequencies = conditional_probabilities(
+                                                words_map, 
+                                                N, 
+                                                alpha=1
+                                            )
+    
+    print("Training finished.")
+
+    save_model(marginal_probs, N, conditional_probs, words_frequencies)
         
     return conditional_probs, words_frequencies, marginal_probs, N
 
@@ -184,7 +192,7 @@ def main(phrase: str, length: int):
         with open(Path("len_vocabulary.pkl"), "rb") as f:
             N = pickle.load(f)
 
-        print("Dados recuperados com sucesso!")
+        print("Model obtained!")
     else:
         conditional_probs, words_frequencies, marginal_probs, N = train()
 
@@ -192,7 +200,6 @@ def main(phrase: str, length: int):
     phrase = phrase.lower()
     for _ in range(length):
         current_word = phrase.split()[-1]
-        print(f"{current_word=}")
 
         next_candidates_probs = find_next_candidates(
                                     current_word, 
@@ -204,15 +211,10 @@ def main(phrase: str, length: int):
                                 )
         
         top_30_candidates = heapq.nlargest(
-                                50, 
+                                30, 
                                 next_candidates_probs.items(), 
                                 key=lambda item: item[1]
                             )
-        
-        # print("Top 30 candidates to the next word:")
-        # for i, (cand, prob) in enumerate(top_30_candidates, 1):
-        #     # cand[1] é a palavra sugerida (o segundo item da tupla da chave)
-        #     print(f"{i}. {cand[1]} (p={prob:.4f})")
 
         candidates = []
         weights = []
@@ -232,8 +234,13 @@ def main(phrase: str, length: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preditor de palavras")
-    parser.add_argument("--phrase", type=str, required=True, help="A frase inicial para predição")
+    parser.add_argument("--phrase", type=str, help="A frase inicial para predição")
     parser.add_argument("--length", type=int, default=1, help="A quantidade de palavras que quero prever")
+    parser.add_argument("--train", type=bool, default=False, help="Flag para treinamento do modelo")
     
     args = parser.parse_args()
-    main(args.phrase, args.length)
+
+    if args.train:
+        train()
+    else:
+        main(args.phrase, args.length)
