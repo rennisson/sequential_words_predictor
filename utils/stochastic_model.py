@@ -2,7 +2,7 @@ from collections import Counter
 from .time_measurement import time_measurement
 
 @time_measurement
-def get_words_map(text):
+def words_frequencies_map(text):
     print("Mapping words...")
     words_map = {}
 

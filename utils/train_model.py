@@ -1,7 +1,7 @@
 from .save_model import save_model
 from .stochastic_model import (
     conditional_probabilities,
-    get_words_map,
+    words_frequencies_map,
     marginal_probabilities
 )
 from .text import get_text
@@ -12,7 +12,7 @@ def train():
     text = get_text()
 
     print("Starting model training...")
-    words_map      = get_words_map(text)
+    words_map      = words_frequencies_map(text)
     marginal_probs = marginal_probabilities(text)
     N              = len(marginal_probs.keys())
     conditional_probs, words_frequencies = conditional_probabilities(
