@@ -5,6 +5,7 @@ import argparse
 import glob
 import heapq
 import pickle
+import random
 import time
 
 CURRENT_WORD = 0
@@ -188,10 +189,32 @@ def main(phrase: str, length: int):
         current_word = phrase.split()[-1]
         print(f"{current_word=}")
 
-        next_candidates_probs = find_next_candidates(current_word, conditional_probs, marginal_probs, words_frequencies, N, alpha=1)
+        next_candidates_probs = find_next_candidates(
+                                    current_word, 
+                                    conditional_probs, 
+                                    marginal_probs, 
+                                    words_frequencies, 
+                                    N, 
+                                    alpha=1
+                                )
+        
+        top_30_candidates = heapq.nlargest(
+                                30, 
+                                next_candidates_probs.items(), 
+                                key=lambda item: item[1]
+                            )
+        
+        # print("Top 30 candidates to the next word:")
+        # for i, (cand, prob) in enumerate(top_30_candidates, 1):
+        #     # cand[1] é a palavra sugerida (o segundo item da tupla da chave)
+        #     print(f"{i}. {cand[1]} (p={prob:.4f})")
 
-        best_candidate = max(next_candidates_probs, key=next_candidates_probs.get)
-        phrase = phrase + " " + best_candidate[1]
+        candidates = [item[0] for item in top_30_candidates]
+        weights    = [item[1] for item in top_30_candidates]
+
+        best_candidate = random.choices(candidates, weights=weights, k=1)[0]
+        _, choosen_word = best_candidate
+        phrase = phrase + " " + choosen_word
     print(f"Final phrase: {phrase}")
 
 
