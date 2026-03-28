@@ -6,10 +6,29 @@ from utils.predict import (
 from utils.save_model import get_file
 from utils.train_model import train
 import argparse
-import pickle
 
 
-def main(phrase: str, length: int):
+def main(phrase: str, length: int) -> None:
+    """
+    Ponto de entrada principal que gerencia o ciclo de vida da predição de texto.
+
+    A função executa as seguintes etapas:
+    1. Verifica a existência de arquivos de modelo pré-treinados (cache) na pasta 'pkl_files'.
+    2. Caso os arquivos não existam, dispara o processo de treinamento completo.
+    3. Caso existam, carrega os dados serializados para a memória.
+    4. Executa um loop de predição iterativo: a cada iteração, identifica a última 
+       palavra da frase atual, prediz a sucessora mais provável (considerando o 
+       componente aleatório e filtro de stop words) e a concatena à frase original.
+
+    Args:
+        phrase (str): A frase ou palavra inicial fornecida pelo usuário para 
+            começar a geração de texto.
+        length (int): A quantidade de palavras adicionais que o modelo deve 
+            gerar após a frase inicial.
+
+    Returns:
+        None: A função imprime a frase final consolidada diretamente no console.
+    """
 
     conditional_probs = {}
     words_frequencies = {}
