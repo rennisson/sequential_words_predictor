@@ -3,6 +3,7 @@ from functools import wraps
 from pathlib import Path
 import argparse
 import glob
+import heapq
 import pickle
 import time
 
@@ -59,7 +60,7 @@ def get_words_map(text):
             words_map[(current_word, next_word)] = words_map[(current_word, next_word)] + 1
         elif (current_word, next_word) not in words_map:
             words_map[(current_word, next_word)] = 1
-    
+
     return words_map
 
 @time_measurement
@@ -72,48 +73,52 @@ def marginal_probabilities(text):
     return marginal_probs
 
 @time_measurement
-def conditional_probabilities(text, words_map, position_key=NEXT_WORD):
+def conditional_probabilities(text, words_map, N, alpha=1, position_key=NEXT_WORD):
     # Calculating CONDITIONAL PROBABILITIES
     words_frequencies = {}
     conditional_probs = {}
-    for word in text:
-        if word not in words_frequencies:
-            # Sum all occurencies of the 'word' in the 'next_word' position
-            word_frequency = {key: freq for key, freq in words_map.items() if key[position_key] == word}
-            words_frequencies[word] = sum(word_frequency.values())
+
+    for word_combination, frequency in words_map.items():
+        # Sum all occurencies of the 'word' in the 'next_word' position
+        if word_combination[1] in words_frequencies:
+            words_frequencies[word_combination[1]] += frequency
+        else:
+            words_frequencies[word_combination[1]] = frequency
         
-            for key, freq in word_frequency.items():
-                conditional_probs[key] = freq / words_frequencies[word] if words_frequencies[word] > 0 else 0
+    for words, freq in words_map.items():
+        conditional_probs[words] = (freq + alpha) / (words_frequencies[words[1]]  + (alpha*N))
     
     return conditional_probs, words_frequencies
 
 
-def total_probability(current_word, words_frequencies, conditional_probs, marginal_probs):
+def total_probability(current_word, words_frequencies, conditional_probs, marginal_probs, N, alpha=1):
     # CALCULO DA PROBABILIDADE TOTAL
     total_probability = 0
-    for word in words_frequencies.keys():
-        # inverse_conditional_probs, _ = conditional_probabilities(clean_text, position_key=CURRENT_WORD)
-        conditional_prob = conditional_probs[(current_word, word)] if (current_word, word) in conditional_probs else 0
+    for word in marginal_probs.keys():
+        conditional_prob = conditional_probs[(current_word, word)] \
+                            if   (current_word, word) in conditional_probs \
+                            else (alpha / (words_frequencies.get(word, 0) + (alpha * N)))
+        
         priori = marginal_probs[word]
         total_probability += conditional_prob * priori
 
     return total_probability
 
 
-def find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies):
+def find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies, N, alpha=1):
     next_candidates_probs = {}
-    next_candidates = [key for key in words_map.keys() if key[CURRENT_WORD] == current_word]
-    total_prob = total_probability(current_word, words_frequencies, conditional_probs, marginal_probs)
+    next_candidates = marginal_probs.keys() 
+    total_prob = total_probability(current_word, words_frequencies, conditional_probs, marginal_probs, N, alpha)
 
     if total_prob <= 0:
         return {'.': 0}
 
     for candidate in next_candidates:
-        # print(f"P{candidate}*P({candidate[1]})")
-        # print(f"{conditional_probs.get(candidate, 0)=}")
-        # print(f"{marginal_probs[candidate[1]]=}")
-        conditional_prob = conditional_probs[candidate] if candidate in conditional_probs else 0
-        next_candidates_probs[candidate] = (conditional_prob * marginal_probs[candidate[1]]) / total_prob
+        conditional_prob = conditional_probs[(current_word, candidate)] \
+                            if (current_word, candidate) in conditional_probs \
+                            else (alpha / (words_frequencies.get(candidate, 0) + (alpha * N)))
+        
+        next_candidates_probs[(current_word, candidate)] = (conditional_prob * marginal_probs[candidate]) / total_prob
     
     return next_candidates_probs
 
@@ -129,10 +134,13 @@ def train():
     print("Mapping words...")
     words_map = get_words_map(clean_text)
 
-    print("Calculating conditional probabilities...")
-    conditional_probs, words_frequencies = conditional_probabilities(clean_text, words_map, position_key=NEXT_WORD)
     print("Calculating marginal probabilities...")
     marginal_probs = marginal_probabilities(clean_text)
+    N = len(marginal_probs.keys())
+
+    print("Calculating conditional probabilities...")
+    conditional_probs, words_frequencies = conditional_probabilities(clean_text, words_map, N, alpha=1, position_key=NEXT_WORD)
+    
     print("Training finished.")
 
     with open("cond_probs.pkl", "wb") as f:
@@ -146,8 +154,11 @@ def train():
     
     with open("words_map.pkl", "wb") as f:
         pickle.dump(words_map, f)
+    
+    with open("len_vocabulary.pkl", "wb") as f:
+        pickle.dump(N, f)
         
-    return words_map,conditional_probs,words_frequencies,marginal_probs
+    return words_map, conditional_probs, words_frequencies, marginal_probs, N
 
 
 def main(phrase: str, length: int):
@@ -156,6 +167,7 @@ def main(phrase: str, length: int):
     conditional_probs = {}
     words_frequencies = {}
     marginal_probs = {}
+    N = 0
 
     if Path('cond_probs.pkl').exists():
         with open(Path('cond_probs.pkl'), "rb") as f:
@@ -169,10 +181,13 @@ def main(phrase: str, length: int):
         
         with open(Path("words_map.pkl"), "rb") as f:
             words_map = pickle.load(f)
+        
+        with open(Path("len_vocabulary.pkl"), "rb") as f:
+            N = pickle.load(f)
 
         print("Dados recuperados com sucesso!")
     else:
-        words_map, conditional_probs, words_frequencies, marginal_probs = train()
+        words_map, conditional_probs, words_frequencies, marginal_probs, N = train()
 
     print("Performing predictions...")
     phrase = phrase.lower()
@@ -180,15 +195,19 @@ def main(phrase: str, length: int):
         current_word = phrase.split()[-1]
         print(f"{current_word=}")
 
-        next_candidates_probs = find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies)
+        next_candidates_probs = find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies, N, alpha=1)
 
-        # print(f"{words_frequencies=}")
-        # print(f"{marginal_probs=}")
-        # print(f"{conditional_probs=}")
-        # print(f"{next_candidates_probs=}")
-
+        top_10_candidatos = heapq.nlargest(
+            10, 
+            next_candidates_probs.items(), 
+            key=lambda item: item[1]
+        )
+        print("Top 10 candidatos para a próxima palavra:")
+        for i, (cand, prob) in enumerate(top_10_candidatos, 1):
+            # cand[1] é a palavra sugerida (o segundo item da tupla da chave)
+            print(f"{i}. {cand[1]} (p={prob:.4f})")
+            
         best_candidate = max(next_candidates_probs, key=next_candidates_probs.get)
-        # print(f"Best candidate: '{best_candidate[1]}', with probability {next_candidates_probs[best_candidate]}")
         phrase = phrase + " " + best_candidate[1]
     print(f"Final phrase: {phrase}")
 
