@@ -1,22 +1,36 @@
 from collections import Counter
+from functools import wraps
 from pathlib import Path
 import argparse
+import glob
 import pickle
+import time
 
 CURRENT_WORD = 0
 NEXT_WORD = 1
 
+def time_measurement(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        end = time.perf_counter()
+        print(f"[{func.__name__}] Execution time: {end - start:.4f}s")
+        return result
+    return wrapper 
+
+@time_measurement
 def get_text():
-    files = ["memoriasBras.txt", "quincas.txt"]
     contents = []
 
-    for file in files:
+    for file in glob.glob("books/*.txt"):
         with open(file, 'r', encoding='utf-8') as f:
             # Lê todo o conteúdo e armazena na variável 'texto'
             contents.append(f.read())
     text = "\n".join(contents)
     return text
 
+@time_measurement
 def format_text(text):
     text_cleaned = text.replace(",", " ")
     text_cleaned = text_cleaned.replace(".", " ")
@@ -27,12 +41,13 @@ def format_text(text):
     text_cleaned = text_cleaned.replace("!", " ")
     text_cleaned = text_cleaned.replace("--", " ")
     text_cleaned = text_cleaned.replace("\n", " ")
+    text_cleaned = text_cleaned.replace('"', " ")
     text_cleaned = text_cleaned.lower()
     text_cleaned = text_cleaned.split()
 
     return text_cleaned
 
-
+@time_measurement
 def get_words_map(text):
     words_map = {}
 
@@ -47,6 +62,7 @@ def get_words_map(text):
     
     return words_map
 
+@time_measurement
 def marginal_probabilities(text):
     N = len(text)
     print(f"{N=}")
@@ -55,17 +71,19 @@ def marginal_probabilities(text):
 
     return marginal_probs
 
+@time_measurement
 def conditional_probabilities(text, words_map, position_key=NEXT_WORD):
     # Calculating CONDITIONAL PROBABILITIES
     words_frequencies = {}
     conditional_probs = {}
     for word in text:
-        # Sum all occurencies of the 'word' in the 'next_word' position
-        word_frequency = {key: freq for key, freq in words_map.items() if key[position_key] == word}
-        words_frequencies[word] = sum(word_frequency.values())
-    
-        for key, freq in word_frequency.items():
-            conditional_probs[key] = freq / words_frequencies[word] if words_frequencies[word] > 0 else 0
+        if word not in words_frequencies:
+            # Sum all occurencies of the 'word' in the 'next_word' position
+            word_frequency = {key: freq for key, freq in words_map.items() if key[position_key] == word}
+            words_frequencies[word] = sum(word_frequency.values())
+        
+            for key, freq in word_frequency.items():
+                conditional_probs[key] = freq / words_frequencies[word] if words_frequencies[word] > 0 else 0
     
     return conditional_probs, words_frequencies
 
@@ -99,6 +117,7 @@ def find_next_candidates(current_word, conditional_probs, marginal_probs, words_
     
     return next_candidates_probs
 
+@time_measurement
 def train():
     print("Getting texts...")
     text = get_text()
@@ -142,13 +161,13 @@ def main(phrase: str, length: int):
         with open(Path('cond_probs.pkl'), "rb") as f:
             conditional_probs = pickle.load(f)
 
-        with open(Path("words_frequencies.pkl"), "wb") as f:
+        with open(Path("words_frequencies.pkl"), "rb") as f:
             words_frequencies = pickle.load(f)
         
-        with open(Path("marginal_probs.pkl"), "wb") as f:
+        with open(Path("marginal_probs.pkl"), "rb") as f:
            marginal_probs = pickle.load(f)
         
-        with open(Path("words_map.pkl"), "wb") as f:
+        with open(Path("words_map.pkl"), "rb") as f:
             words_map = pickle.load(f)
 
         print("Dados recuperados com sucesso!")
