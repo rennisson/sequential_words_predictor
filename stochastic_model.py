@@ -9,7 +9,12 @@ import random
 import time
 
 CURRENT_WORD = 0
-NEXT_WORD = 1
+NEXT_WORD    = 1
+STOP_WORDS   = [
+    'o', 'a', 'os', 'as', 'de', 'do', 'da', 'dos', 'das', 
+    'em', 'no', 'na', 'nos', 'nas', 'um', 'uma', 'uns', 'umas',
+    'e', 'que', 'com', 'por', 'para', 'se', 'meu', 'seu'
+]
 
 def time_measurement(func):
     @wraps(func)
@@ -199,7 +204,7 @@ def main(phrase: str, length: int):
                                 )
         
         top_30_candidates = heapq.nlargest(
-                                30, 
+                                50, 
                                 next_candidates_probs.items(), 
                                 key=lambda item: item[1]
                             )
@@ -209,8 +214,15 @@ def main(phrase: str, length: int):
         #     # cand[1] é a palavra sugerida (o segundo item da tupla da chave)
         #     print(f"{i}. {cand[1]} (p={prob:.4f})")
 
-        candidates = [item[0] for item in top_30_candidates]
-        weights    = [item[1] for item in top_30_candidates]
+        candidates = []
+        weights = []
+
+        if random.choice([0,1]) == 0:
+            candidates = [item[0] for item in top_30_candidates if item[0][1] not in STOP_WORDS]
+            weights    = [item[1] for item in top_30_candidates if item[0][1] not in STOP_WORDS]
+        else:
+            candidates = [item[0] for item in top_30_candidates]
+            weights    = [item[1] for item in top_30_candidates]
 
         best_candidate = random.choices(candidates, weights=weights, k=1)[0]
         _, choosen_word = best_candidate
