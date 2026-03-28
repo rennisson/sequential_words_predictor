@@ -73,7 +73,7 @@ def marginal_probabilities(text):
     return marginal_probs
 
 @time_measurement
-def conditional_probabilities(text, words_map, N, alpha=1, position_key=NEXT_WORD):
+def conditional_probabilities(words_map, N, alpha=1):
     # Calculating CONDITIONAL PROBABILITIES
     words_frequencies = {}
     conditional_probs = {}
@@ -105,7 +105,7 @@ def total_probability(current_word, words_frequencies, conditional_probs, margin
     return total_probability
 
 
-def find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies, N, alpha=1):
+def find_next_candidates(current_word, conditional_probs, marginal_probs, words_frequencies, N, alpha=1):
     next_candidates_probs = {}
     next_candidates = marginal_probs.keys() 
     total_prob = total_probability(current_word, words_frequencies, conditional_probs, marginal_probs, N, alpha)
@@ -139,7 +139,7 @@ def train():
     N = len(marginal_probs.keys())
 
     print("Calculating conditional probabilities...")
-    conditional_probs, words_frequencies = conditional_probabilities(clean_text, words_map, N, alpha=1, position_key=NEXT_WORD)
+    conditional_probs, words_frequencies = conditional_probabilities(words_map, N, alpha=1)
     
     print("Training finished.")
 
@@ -152,18 +152,14 @@ def train():
     with open("marginal_probs.pkl", "wb") as f:
         pickle.dump(marginal_probs, f)
     
-    with open("words_map.pkl", "wb") as f:
-        pickle.dump(words_map, f)
-    
     with open("len_vocabulary.pkl", "wb") as f:
         pickle.dump(N, f)
         
-    return words_map, conditional_probs, words_frequencies, marginal_probs, N
+    return conditional_probs, words_frequencies, marginal_probs, N
 
 
 def main(phrase: str, length: int):
 
-    words_map = {}
     conditional_probs = {}
     words_frequencies = {}
     marginal_probs = {}
@@ -179,15 +175,12 @@ def main(phrase: str, length: int):
         with open(Path("marginal_probs.pkl"), "rb") as f:
            marginal_probs = pickle.load(f)
         
-        with open(Path("words_map.pkl"), "rb") as f:
-            words_map = pickle.load(f)
-        
         with open(Path("len_vocabulary.pkl"), "rb") as f:
             N = pickle.load(f)
 
         print("Dados recuperados com sucesso!")
     else:
-        words_map, conditional_probs, words_frequencies, marginal_probs, N = train()
+        conditional_probs, words_frequencies, marginal_probs, N = train()
 
     print("Performing predictions...")
     phrase = phrase.lower()
@@ -195,18 +188,8 @@ def main(phrase: str, length: int):
         current_word = phrase.split()[-1]
         print(f"{current_word=}")
 
-        next_candidates_probs = find_next_candidates(current_word, conditional_probs, marginal_probs, words_map, words_frequencies, N, alpha=1)
+        next_candidates_probs = find_next_candidates(current_word, conditional_probs, marginal_probs, words_frequencies, N, alpha=1)
 
-        top_10_candidatos = heapq.nlargest(
-            10, 
-            next_candidates_probs.items(), 
-            key=lambda item: item[1]
-        )
-        print("Top 10 candidatos para a próxima palavra:")
-        for i, (cand, prob) in enumerate(top_10_candidatos, 1):
-            # cand[1] é a palavra sugerida (o segundo item da tupla da chave)
-            print(f"{i}. {cand[1]} (p={prob:.4f})")
-            
         best_candidate = max(next_candidates_probs, key=next_candidates_probs.get)
         phrase = phrase + " " + best_candidate[1]
     print(f"Final phrase: {phrase}")
